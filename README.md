@@ -1,3 +1,4 @@
 # da
 
-Simple dynamic array in C.
+A generic dynamic array in C.
+

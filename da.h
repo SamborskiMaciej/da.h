@@ -13,23 +13,27 @@ enum daFields {
     DATA          = 3,
 };
                                        
-void * _daCreate(size_t initCapacity, size_t type, size_t size);
-void * _daPush(void * da, void * item);
-void _daPop(void * da, void * element);
-void daFree(void * da);
+typedef void * dynarr;
+dynarr _daCreate(size_t initCapacity, size_t type, size_t size);
+dynarr _daPush(dynarr da, void * item);
+void _daPop(dynarr da, void * element);
+void daFree(dynarr da);
 
-size_t daSize(void * da);
-size_t daCap(void * da);
-size_t daType(void * da);
+size_t daSize(dynarr da);
+size_t daCap(dynarr da);
+size_t daType(dynarr da);
 
-size_t * daField(void * da, enum daFields field);
+size_t * daField(dynarr da, enum daFields field);
+void * daGetRef(dynarr da, size_t index);
+
 typedef void(* func)(void * item);
-void daForeach(void * da, func f);
+void daForeach(dynarr da, func f);
 
 typedef char * heapstr;
-heapstr daToCStr(void * da);
-void daBzero(void * da);
+heapstr daToCStr(dynarr da);
+void daBzero(dynarr da);
 
+#define dynarr(type) type *
 #define daCreate(type, cap) _daCreate(cap, sizeof(type), 0)
 #define daPush(da, item) da = _daPush(da, &item)
 #define daPop(da, item) _daPop(da, &item)
@@ -38,30 +42,37 @@ void daBzero(void * da);
            
 #ifdef DA_IMPLEMENTATION 
 
-void * _daCreate(size_t cap, size_t type, size_t size)
+dynarr _daCreate(size_t cap, size_t type, size_t size)
 {
     size_t * da = (size_t *) malloc(type * cap + DATA * sizeof(size_t));
     da[SIZE] = size;
     da[CAPACITY] = cap;
     da[TYPE] = type;
 
-    return (void *) (da + DATA);
+    return (dynarr) (da + DATA);
 }                        
 
-void daFree(void * da)
+void daFree(dynarr da)
 {
     free((size_t *) da - DATA);
 }
 
-void * daResize(void * da)
+dynarr daCopy(dynarr da)
 {
-    void * temp = _daCreate(daCap(da) * 2, daType(da), daSize(da));
+    dynarr temp = _daCreate(daCap(da), daType(da), daSize(da));
+    memcpy(temp, da, daSize(da) * daType(da));
+    return temp;
+}
+
+dynarr daResize(dynarr da)
+{
+    dynarr temp = _daCreate(daCap(da) * 2, daType(da), daSize(da));
     memcpy(temp, da, daSize(da) * daType(da));
     daFree(da);
     return temp;
 }
 
-void * _daPush(void * da, void * item)
+dynarr _daPush(dynarr da, void * item)
 {
     if (daSize(da) >= daCap(da)) da = daResize(da);
     memcpy((char *)da + daSize(da) * daType(da), item, daType(da));
@@ -69,13 +80,13 @@ void * _daPush(void * da, void * item)
     return da;
 }
 
-void _daPop(void * da, void * elem)
+void _daPop(dynarr da, void * elem)
 {   
     *daField(da, SIZE) -= 1;
     memcpy(elem, (char *)da + daSize(da) * daType(da), daType(da));
 }
 
-size_t * daField(void * da, enum daFields field)
+size_t * daField(dynarr da, enum daFields field)
 {
     if (field < SIZE || field > TYPE)
     {
@@ -89,38 +100,51 @@ size_t * daField(void * da, enum daFields field)
     return ((size_t *) da - DATA + field);
 }
 
-size_t daSize(void * da)
+size_t daSize(dynarr da)
 {
     return ((size_t *) da - DATA)[SIZE];
 }
 
-size_t daCap(void * da)
+size_t daCap(dynarr da)
 {
     return ((size_t *) da - DATA)[CAPACITY];
 }
 
-size_t daType(void * da)
+size_t daType(dynarr da)
 {
     return ((size_t *) da - DATA)[TYPE];
 }
 
-void daForeach(void * da, func f)
+void daForeach(dynarr da, func f)
 {
     for (size_t i = 0; i < daSize(da); ++i)
         f((char *) da + i * daType(da));
 }
 
-heapstr daToCStr(void * da)
+heapstr daToCStr(dynarr da)
 {
     char * buffer = (char *) calloc(1, daSize(da) + 1);
     memcpy(buffer, da,daSize(da) * daType(da));
     return buffer;
 }
 
-void daBzero(void * da)
+void daBzero(dynarr da)
 {
     memset(da, '\0', daCap(da));
     *daField(da, SIZE) = 0;
+}
+
+void * daGetRef(dynarr da, size_t index)
+{
+    if (index >= daSize(da))
+    {
+        fprintf(stderr, "*------------------------------*\n");
+        fprintf(stderr, "ERROR: Access out of bounds\n");
+        fprintf(stderr, "*------------------------------*\n");
+        exit(1);
+    }
+
+    return (void *)((char *)da + index * daType(da));
 }
 
 #endif // DA_IMPLEMENTATION
